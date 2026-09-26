@@ -1,10 +1,8 @@
 import os
-import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 
 from .database import init_db, get_assessment_by_id
 from .react_engine import run_react_governance_engine
@@ -79,12 +77,12 @@ def compare_assessments(req: CompareRequest):
     }
 
 @app.get("/api/v1/export/{assessment_id}")
-def export_assessment(assessment_id: str, format: str = Query("json", pattern="^(json|md)$")):
+def export_assessment(assessment_id: str, fmt: str = Query("json", alias="format", pattern="^(json|md)$")):
     res = get_assessment_by_id(assessment_id)
     if not res:
         raise HTTPException(status_code=404, detail="Assessment not found")
-        
-    if format == "json":
+
+    if fmt == "json":
         return res
     else:
         # Markdown export format

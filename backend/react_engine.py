@@ -134,7 +134,7 @@ def run_react_governance_engine(agent_spec: Dict[str, Any]) -> Dict[str, Any]:
         return run_fallback_assessment(agent_spec)
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
+        client = anthropic.Anthropic(api_key=api_key, timeout=60.0)
         
         system_prompt = (
             "You are an expert AI Governance Officer conducting a compliance assessment. "

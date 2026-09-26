@@ -83,6 +83,7 @@ export default function App() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setCurrentAssessment(null);
     try {
       const res = await fetch('/api/v1/assess', {
         method: 'POST',
@@ -169,13 +170,13 @@ export default function App() {
         <nav className="nav-tabs">
           <button 
             className={`nav-tab ${activeTab === 'assess' ? 'active' : ''}`}
-            onClick={() => setActiveTab('assess')}
+            onClick={() => { setActiveTab('assess'); setError(null); }}
           >
             <Cpu size={16} /> Assessment
           </button>
           <button 
             className={`nav-tab ${activeTab === 'compare' ? 'active' : ''}`}
-            onClick={() => setActiveTab('compare')}
+            onClick={() => { setActiveTab('compare'); setError(null); }}
           >
             <GitCompare size={16} /> Compare Agents
           </button>
