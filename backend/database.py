@@ -67,7 +67,7 @@ def save_assessment(
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT OR REPLACE INTO agent_specs
+            INSERT INTO agent_specs
             (id, name, description, domain, autonomy_scope, integrations, human_in_loop_level)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
@@ -83,14 +83,14 @@ def save_assessment(
         )
         cursor.execute(
             """
-            INSERT OR REPLACE INTO assessments (id, agent_spec_id, autonomy_tier, status)
+            INSERT INTO assessments (id, agent_spec_id, autonomy_tier, status)
             VALUES (?, ?, ?, ?)
             """,
             (assessment_id, spec_id, tier, "COMPLETED")
         )
         cursor.execute(
             """
-            INSERT OR REPLACE INTO assessment_results
+            INSERT INTO assessment_results
             (id, assessment_id, risks_json, controls_json, compliance_json, playbook_md)
             VALUES (?, ?, ?, ?, ?, ?)
             """,

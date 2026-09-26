@@ -23,7 +23,7 @@ const PRESETS = [
       domain: "Customer Service",
       autonomy_scope: "Read-only Q&A. No autonomous actions or database mutations permitted.",
       integrations: "Knowledge Base Read-Only API",
-      human_in_loop_level: "Human approves all escalations"
+      human_in_loop_level: "Human approves all outputs"
     }
   },
   {
@@ -34,7 +34,7 @@ const PRESETS = [
       domain: "Fintech / Banking",
       autonomy_scope: "Approves loans under $10,000 without human review. Flagged loans routed to human underwriter.",
       integrations: "Credit Bureau API, Core Banking API, Fraud Detection Engine",
-      human_in_loop_level: "Approval gate for loans > $10,000"
+      human_in_loop_level: "Approval-Gate for transactions over threshold"
     }
   },
   {
@@ -49,6 +49,14 @@ const PRESETS = [
     }
   }
 ];
+
+// FastAPI returns a string detail for HTTPException and a list of errors for validation (422).
+const errorMessage = (errData, status) => {
+  if (Array.isArray(errData.detail)) {
+    return errData.detail.map(d => `${d.loc?.slice(-1)[0] ?? 'field'}: ${d.msg}`).join('; ');
+  }
+  return errData.detail || `Server error ${status}`;
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('assess');
@@ -92,7 +100,7 @@ export default function App() {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || `Server error ${res.status}`);
+        throw new Error(errorMessage(errData, res.status));
       }
       const data = await res.json();
       setCurrentAssessment(data);
@@ -119,7 +127,7 @@ export default function App() {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || `Server error ${res.status}`);
+        throw new Error(errorMessage(errData, res.status));
       }
       const data = await res.json();
       setCompareResult(data);
@@ -157,11 +165,11 @@ export default function App() {
       <header className="header-bar">
         <div className="brand">
           <div className="brand-icon">
-            <ShieldCheck size={24} />
+            <ShieldCheck size={30} />
           </div>
           <div>
             <h1 className="brand-title">Agentic AI Governance Platform</h1>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            <span className="brand-subtitle">
               ReAct-Powered Autonomy Classification & Governance Engine
             </span>
           </div>
@@ -172,13 +180,13 @@ export default function App() {
             className={`nav-tab ${activeTab === 'assess' ? 'active' : ''}`}
             onClick={() => { setActiveTab('assess'); setError(null); }}
           >
-            <Cpu size={16} /> Assessment
+            <Cpu size={20} /> Assessment
           </button>
           <button 
             className={`nav-tab ${activeTab === 'compare' ? 'active' : ''}`}
             onClick={() => { setActiveTab('compare'); setError(null); }}
           >
-            <GitCompare size={16} /> Compare Agents
+            <GitCompare size={20} /> Compare Agents
           </button>
         </nav>
       </header>
@@ -189,7 +197,7 @@ export default function App() {
           <div className="glass-panel">
             <div className="section-header">
               <h2 className="section-title">
-                <Sliders size={20} style={{ color: 'var(--accent-indigo)' }} />
+                <Sliders size={24} style={{ color: 'var(--accent-indigo)' }} />
                 Agent Specification
               </h2>
             </div>
@@ -298,7 +306,7 @@ export default function App() {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={18} />
+                    <Sparkles size={22} />
                     Run Governance Assessment
                   </>
                 )}
@@ -367,8 +375,8 @@ export default function App() {
                   </h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginTop: '12px' }}>
                     <div>
-                      <strong style={{ fontSize: '0.85rem', color: 'var(--accent-indigo)' }}>ISO 42001</strong>
-                      <ul className="item-list" style={{ marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.98rem', color: 'var(--accent-indigo)' }}>ISO 42001</strong>
+                      <ul className="item-list" style={{ marginTop: '8px' }}>
                         {currentAssessment.compliance.iso_42001?.map((item, idx) => (
                           <li key={idx}>{item}</li>
                         ))}
@@ -376,8 +384,8 @@ export default function App() {
                     </div>
 
                     <div>
-                      <strong style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)' }}>NIST AI RMF</strong>
-                      <ul className="item-list" style={{ marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.98rem', color: 'var(--accent-cyan)' }}>NIST AI RMF</strong>
+                      <ul className="item-list" style={{ marginTop: '8px' }}>
                         {currentAssessment.compliance.nist_ai_rmf?.map((item, idx) => (
                           <li key={idx}>{item}</li>
                         ))}
@@ -385,8 +393,8 @@ export default function App() {
                     </div>
 
                     <div>
-                      <strong style={{ fontSize: '0.85rem', color: 'var(--accent-purple)' }}>EU AI Act</strong>
-                      <ul className="item-list" style={{ marginTop: '6px' }}>
+                      <strong style={{ fontSize: '0.98rem', color: 'var(--accent-purple)' }}>EU AI Act</strong>
+                      <ul className="item-list" style={{ marginTop: '8px' }}>
                         {currentAssessment.compliance.eu_ai_act?.map((item, idx) => (
                           <li key={idx}>{item}</li>
                         ))}
@@ -398,8 +406,8 @@ export default function App() {
                 {/* Incident Response Playbook */}
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <FileText size={18} style={{ color: 'var(--accent-indigo)' }} />
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px', color: '#FFFFFF' }}>
+                      <FileText size={20} style={{ color: 'var(--accent-indigo)' }} />
                       Incident Response Playbook
                     </h3>
                     <button className="btn-secondary" onClick={handleCopyPlaybook}>
@@ -420,10 +428,10 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="glass-panel" style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-secondary)' }}>
-                <Cpu size={48} style={{ color: 'var(--border-glow)', marginBottom: '16px' }} />
-                <h3 style={{ color: 'var(--text-primary)', marginBottom: '8px' }}>No Active Assessment</h3>
-                <p style={{ maxWidth: '400px', margin: '0 auto', fontSize: '0.9rem' }}>
+              <div className="glass-panel empty-state">
+                <Cpu className="empty-state-icon" />
+                <h3 className="empty-state-title">No Active Assessment</h3>
+                <p className="empty-state-desc">
                   Fill out the agent specification on the left or select a preset to run the ReAct reasoning governance classification.
                 </p>
               </div>

@@ -74,40 +74,50 @@ The **Agentic AI Governance Platform** provides enterprise risk managers, compli
 ## 🚦 Getting Started
 
 ### Prerequisites
+
 - **Python:** 3.11 or higher
 - **Node.js:** v18 or higher (bundled with `npm`)
 - **Git:** 2.x
 
 ### 1. Clone & Environment Setup
+
 ```powershell
 git clone https://github.com/vinodnair03/Agentic-AI-Governance-Platform.git
 cd Agentic-AI-Governance-Platform
 ```
 
 Create a `.env` file in the root directory:
+
 ```env
 ANTHROPIC_API_KEY=sk-ant-your-api-key-here
 ```
 
 ### 2. Backend Setup
+
 Install Python dependencies:
+
 ```powershell
 python -m pip install -r backend/requirements.txt
 ```
 
 Start the FastAPI backend server:
+
 ```powershell
 python -m uvicorn backend.main:app --reload --port 8000
 ```
+
 *API docs available at: `http://localhost:8000/docs`*
 
 ### 3. Frontend Setup
+
 In a new terminal window:
+
 ```powershell
 cd frontend
 npm install
 npm run dev
 ```
+
 Open **`http://localhost:3000`** in your browser.
 
 ---
@@ -115,6 +125,7 @@ Open **`http://localhost:3000`** in your browser.
 ## 🧪 Running Automated Tests
 
 Run the automated 6-step API and database test suite:
+
 ```powershell
 python -c "import sys; sys.path.insert(0, '.'); sys.path.insert(0, r'scratch'); import test_suite; test_suite.run_tests()"
 ```

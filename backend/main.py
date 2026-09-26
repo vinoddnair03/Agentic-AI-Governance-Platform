@@ -1,15 +1,22 @@
 import os
+import re
+import time
+import uuid
+import traceback
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 
 from .database import init_db, get_assessment_by_id
 from .react_engine import run_react_governance_engine
+from .logger import logger
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    logger.info("Database initialized successfully.")
     yield
 
 app = FastAPI(
@@ -19,7 +26,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,17 +36,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Request & Error Logging Middleware
+@app.middleware("http")
+async def log_requests_and_errors(request: Request, call_next):
+    request_id = f"req_{uuid.uuid4().hex[:8]}"
+    request.state.request_id = request_id
+    start_time = time.time()
+
+    logger.info("[%s] %s %s - Client: %s", request_id, request.method, request.url.path, request.client.host if request.client else "unknown")
+
+    try:
+        response: Response = await call_next(request)
+        process_time_ms = round((time.time() - start_time) * 1000, 2)
+        logger.info("[%s] Completed %s %s with Status %s (%sms)", request_id, request.method, request.url.path, response.status_code, process_time_ms)
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception as exc:
+        process_time_ms = round((time.time() - start_time) * 1000, 2)
+        tb = traceback.format_exc()
+        logger.error("[%s] UNHANDLED ERROR on %s %s (%sms):\n%s", request_id, request.method, request.url.path, process_time_ms, tb)
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "Internal Server Error",
+                "request_id": request_id,
+                "message": "An unexpected server error occurred. Full details recorded in logs/error.log."
+            },
+            headers={"X-Request-ID": request_id}
+        )
+
+SHORT_TEXT = 200
+LONG_TEXT = 4000
+
 class AgentSpecRequest(BaseModel):
-    name: str = Field(..., example="Financial Loan Agent")
-    description: str = Field(..., example="Autonomous loan pre-approval agent")
-    domain: str = Field(..., example="Fintech")
-    autonomy_scope: str = Field(..., example="Approves loans under $10,000 without human review")
-    integrations: str = Field(..., example="Credit Bureau API, Core Banking API")
-    human_in_loop_level: str = Field(..., example="Periodic")
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    name: str = Field(..., min_length=1, max_length=SHORT_TEXT, examples=["Financial Loan Agent"])
+    description: str = Field(..., min_length=1, max_length=LONG_TEXT, examples=["Autonomous loan pre-approval agent"])
+    domain: str = Field(..., min_length=1, max_length=SHORT_TEXT, examples=["Fintech"])
+    autonomy_scope: str = Field(..., min_length=1, max_length=LONG_TEXT, examples=["Approves loans under $10,000 without human review"])
+    integrations: str = Field(..., min_length=1, max_length=LONG_TEXT, examples=["Credit Bureau API, Core Banking API"])
+    human_in_loop_level: str = Field(..., min_length=1, max_length=SHORT_TEXT, examples=["Periodic Review"])
 
 class CompareRequest(BaseModel):
-    assessment_id_1: str
-    assessment_id_2: str
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    assessment_id_1: str = Field(..., max_length=64)
+    assessment_id_2: str = Field(..., max_length=64)
+
+def _safe_filename(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9_-]+", "_", name.lower()).strip("_")
+    return slug or "assessment"
 
 @app.get("/api/v1/health")
 def health_check():
@@ -48,17 +96,17 @@ def health_check():
 @app.post("/api/v1/assess")
 def create_assessment(spec: AgentSpecRequest):
     try:
-        spec_dict = spec.model_dump()
-        result = run_react_governance_engine(spec_dict)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return run_react_governance_engine(spec.model_dump())
+    except Exception as exc:
+        logger.error("Failed to process assessment request: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail="Assessment failed due to an internal server error.")
 
 @app.get("/api/v1/assessment/{assessment_id}")
 def get_assessment(assessment_id: str):
     res = get_assessment_by_id(assessment_id)
     if not res:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        logger.warning("Fetch failed: Assessment ID '%s' not found.", assessment_id)
+        raise HTTPException(status_code=404, detail=f"Assessment '{assessment_id}' not found.")
     return res
 
 @app.post("/api/v1/compare")
@@ -67,7 +115,8 @@ def compare_assessments(req: CompareRequest):
     res2 = get_assessment_by_id(req.assessment_id_2)
     
     if not res1 or not res2:
-        raise HTTPException(status_code=404, detail="One or both assessment IDs not found")
+        logger.warning("Comparison failed: One or both IDs not found ('%s', '%s').", req.assessment_id_1, req.assessment_id_2)
+        raise HTTPException(status_code=404, detail="One or both assessment IDs not found.")
         
     return {
         "agent_1": res1,
@@ -80,12 +129,12 @@ def compare_assessments(req: CompareRequest):
 def export_assessment(assessment_id: str, fmt: str = Query("json", alias="format", pattern="^(json|md)$")):
     res = get_assessment_by_id(assessment_id)
     if not res:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        logger.warning("Export failed: Assessment ID '%s' not found.", assessment_id)
+        raise HTTPException(status_code=404, detail=f"Assessment '{assessment_id}' not found.")
 
     if fmt == "json":
         return res
     else:
-        # Markdown export format
         md_content = f"""# AI Governance Assessment Report
 
 **Agent Name:** {res['agent_name']}  
@@ -121,4 +170,4 @@ def export_assessment(assessment_id: str, fmt: str = Query("json", alias="format
 
 {res['playbook_md']}
 """
-        return {"filename": f"{res['agent_name'].lower().replace(' ', '_')}_report.md", "content": md_content}
+        return {"filename": f"{_safe_filename(res['agent_name'])}_report.md", "content": md_content}
